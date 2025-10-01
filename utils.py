@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import librosa
 from tqdm import tqdm
+import soundfile as sf
 
 def gen_adj(A):
     D = torch.pow(A.sum(1).float(), -0.5)
@@ -75,11 +76,30 @@ def save_cm_plot(cm, target_names, output_name, title='Confusion matrix', cmap=N
 
     plt.savefig(output_name)
 
+def extract_acoustic_vector(wav_path):
+    """
+    Reads a wav file and returns a 1‑D torch.FloatTensor
+    containing the handcrafted acoustic descriptor produced by
+    utils.get_features().
+    """
+    signal, sr = sf.read(wav_path)
+    if signal.ndim > 1:
+        signal = signal.mean(axis=1)
+    feats = get_features(signal, sr=sr)
+    return torch.from_numpy(feats).float()
+
+def collate_audio_fn(batch):
+    adj_batch, feat_batch, label_batch = zip(*batch)
+    adj_batch = torch.stack(adj_batch) 
+    feat_batch = torch.stack(feat_batch)
+    label_batch = torch.tensor(label_batch)
+    return adj_batch, feat_batch, label_batch
+
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
     
-def get_features(X, sr):
+def get_features(X, sr=22050):
         stft = np.abs(librosa.stft(X))
         pitches, mags = librosa.piptrack(X, sr=sr, S=stft, fmin=70, fmax=400)
         pitch = []

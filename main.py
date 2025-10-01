@@ -14,7 +14,8 @@ from aligner import FaceAligner
 from breg_next import BReGNeXt, multi_BReGNeXt
 from models import Emotion_GCN, multi_densenet, BReGNeXt_GCN
 from dataloading import AffectNet_dataset, Affwild2_dataset, IEMOCAP_dataset
-from training import train_model_single, eval_model_single, train_model_multi, eval_model_multi
+from utils import collate_audio_fn
+from training import train_model_single, eval_model_single, train_model_multi, eval_model_multi, get_IEMOCAP_loaders
 
 ########################################################
 # Configuration
@@ -25,6 +26,10 @@ parser = argparse.ArgumentParser(
     description='Train Mix Modality Expression Recognition model using Emotion-GCN')
 
 # Data loading
+parser.add_argument('--modality', choices=['visual', 'audio'],
+                    default='visual', help='Which input modality to use')
+# parser.add_argument('--audio_feature', choices=['mfcc', 'logmel', 'egemaps'],
+#                     default='mfcc', help='Acoustic feature type (audio only)')
 parser.add_argument('--image_dir',
                     default='./affectnet',
                     help='path to images of the dataset')
@@ -166,34 +171,45 @@ def main():
                                         crop_face=True)
         val_dataset = AffectNet_dataset(root_dir=args.image_dir, data_pkl=args.data, emb_pkl=args.emb, aligner=aligner, train=False, transform=val_transforms,
                                         crop_face=True)
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
+                                  shuffle=True, num_workers=args.workers, pin_memory=True)
+        val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size,
+                                shuffle=True, num_workers=args.workers, pin_memory=True)
     elif args.dataset == 'affwild2':
         train_dataset = Affwild2_dataset(data_pkl=args.data, emb_pkl=args.emb, train=True, transform=train_transforms)
 
         val_dataset = Affwild2_dataset(data_pkl=args.data, emb_pkl=args.emb, train=False, transform=val_transforms)
 
+        train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
+                                  shuffle=True, num_workers=args.workers, pin_memory=True)
+        val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size,
+                                shuffle=True, num_workers=args.workers, pin_memory=True)
+
     else:
-        train_dataset = IEMOCAP_dataset(root_dir=args.audio_dir, data_pkl=args.data, sr=22050, train=True)
-        val_dataset = IEMOCAP_dataset(root_dir=args.audio_dir, data_pkl=args.data, sr=22050, train=False)
-        collate = audio_collate_fn
+        train_dataset = IEMOCAP_dataset(train=True)
+        val_dataset = IEMOCAP_dataset(train=False)
+        # train_dataloader, val_dataloader, test_dataloader = get_IEMOCAP_loaders
+        train_dataloader = DataLoader(
+            train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.workers,
+            pin_memory=True,
+            collate_fn=collate_audio_fn)
 
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.workers,
-        pin_memory=True,
-        collate_fn=collate,
-    )
-
-    val_loader = DataLoader(
-        val_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.workers,
-        pin_memory=True,
-        collate_fn=collate,
-    )
+        val_dataloader = DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.workers,
+            pin_memory=True,
+            collate_fn=collate_audio_fn)
+        
+    sample_adj, sample_feat, sample_lbl = next(iter(train_dataloader))
+    print("[DEBUG] train batch shapes:",
+        "adj:", sample_adj.shape,
+        "feat:", sample_feat.shape,
+        "label:", sample_lbl.shape)
 
     #############################################################################
     # Model Definition (Model, Loss Function, Optimizer)

@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 import re
 import librosa
-import soundfile as sf
 import matplotlib.pyplot as plt
 import matplotlib.style as ms
 from torch.nn.utils.rnn import pad_sequence
 from joblib import Parallel, delayed
 from PIL import Image
 from torch.utils.data import Dataset
+from utils import extract_acoustic_vector
 
 class AffectNet_annotation(object):
     """A class that represents a sample from AffectNet."""
@@ -129,31 +129,39 @@ class Affwild2_dataset(Dataset):
         return image, expression, cont, self.inp
                 
 class IEMOCAP_dataset(Dataset):
-    '''IEMOCAP'''
-
-    def __init__(self, train=True):
+    """
+    IEMOCAP audio dataset object specifically designed for interfacing with the GCN
+    Returns:
+        - graph: torch.FloatTensor (N, N) adjacency matrix (same for all samples)
+        - feats: torch.FloatTensor (N, F) acoustic node features
+        - label: int (emotion class)
+    """
+    def __init__(self, train=True, adj_file='./adj.pkl'):
         self.videoIDs, self.videoSpeaker, self.videoLabels, self.videoText, \
         self.videoAudio, self.videoVisual, self.videoSentence, self.trainVid,\
         self.testVid = pickle.load(open('./iemocap_features/IEMOCAP_features.pkl', 'rb'), encoding='utf8')
 
         self.keys = [x for x in (self.trainVid if train else self.testVid)]
         self.len = len(self.keys)
+        self.adj = torch.load(adj_file)
+        self.labels = self.videoLabels
 
-        def __len__(self):
-            return self.len
+    def __len__(self):
+        return self.len
 
-        def __getitem__(self, index):
-            vid=self.keys[index]
-            return torch.FloatTensor(self.videoText[vid]),\
-                torch.FloatTensor(self.videoVisual[vid]),\
-                torch.FloatTensor(self.videoAudio[vid]),\
-                torch.FloatTensor([[1,0] if x=='M' else [0,1] for x in\
-                                    self.videoSpeakers[vid]]),\
-                torch.FloatTensor([1]*len(self.videoLabels[vid])),\
-                torch.LongTensor(self.videoLabels[vid]),\
-                vid
-        
-        def collate_audio_fn(self, data):
-            dat = pd.DataFrame(data)
-            return [pad_sequence(dat[i]) if i<4 else pad_sequence(dat[i], True) if i<6 else dat[i].tolist() for i in dat]
-        
+    def __getitem__(self, index):
+        vid=self.keys[index]
+        wav_path = self.videoAudio[vid]
+        acoustic_vec = extract_acoustic_vector(wav_path=wav_path)
+        N = self.adj.size(0)
+        node_feature = acoustic_vec.unsqueeze(0).repeat(N,1)
+        label = int(self.labels[vid])
+        return torch.FloatTensor(self.adj.clone()), node_feature, label
+        # return torch.FloatTensor(self.videoText[vid]),\
+        #     torch.FloatTensor(self.videoVisual[vid]),\
+        #     torch.FloatTensor(self.videoAudio[vid]),\
+        #     torch.FloatTensor([[1,0] if x=='M' else [0,1] for x in\
+        #                         self.videoSpeakers[vid]]),\
+        #     torch.FloatTensor([1]*len(self.videoLabels[vid])),\
+        #     torch.LongTensor(self.videoLabels[vid]),\
+        #     vid
