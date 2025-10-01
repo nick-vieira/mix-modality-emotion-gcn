@@ -13,7 +13,7 @@ from utils import get_lr
 from aligner import FaceAligner
 from breg_next import BReGNeXt, multi_BReGNeXt
 from models import Emotion_GCN, multi_densenet, BReGNeXt_GCN
-from dataloading import AffectNet_dataset, Affwild2_dataset
+from dataloading import AffectNet_dataset, Affwild2_dataset, IEMOCAP_dataset
 from training import train_model_single, eval_model_single, train_model_multi, eval_model_multi
 
 ########################################################
@@ -22,18 +22,21 @@ from training import train_model_single, eval_model_single, train_model_multi, e
 
 # Define argument parser
 parser = argparse.ArgumentParser(
-    description='Train Facial Expression Recognition model using Emotion-GCN')
+    description='Train Mix Modality Expression Recognition model using Emotion-GCN')
 
 # Data loading
 parser.add_argument('--image_dir',
                     default='./affectnet',
                     help='path to images of the dataset')
+parser.add_argument('--audio_dir',
+                    default='./iemocap',
+                    help='path to audio of the dataset')
 parser.add_argument('--data',
                     default='./data.pkl',
                     help='path to the pickle file that holds all the information for each sample')
 parser.add_argument('--dataset', default='affectnet', type=str,
                     help='Dataset to use (default: affectnet)',
-                    choices=['affectnet', 'affwild2'])
+                    choices=['affectnet', 'affwild2', 'iemocap'])
 parser.add_argument('--network', default='densenet', type=str,
                     help='Network to use (default: densenet)',
                     choices=['densenet', 'bregnext'])
@@ -70,6 +73,8 @@ args = parser.parse_args()
 # Check inputs.
 if not os.path.isdir(args.image_dir):
     raise FileNotFoundError("Image directory not exists")
+if not os.path.isdir(args.audio_dir):
+    raise FileNotFoundError("Audio directory does not exist")
 if not os.path.exists(args.data):
     raise FileNotFoundError("Pickle file not exists")
 if args.workers <= 0:
@@ -92,6 +97,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 output_file = os.path.join('./outputs', args.saved_model)
 
 print("Image directory: {}".format(args.image_dir))
+print("Audio directory: {}".format(args.audio_dir))
 print("Data file: {}".format(args.data))
 print("Dataset name: {}".format(args.dataset))
 print("Network name: {}".format(args.network))
@@ -105,6 +111,22 @@ print("Lambda {}".format(args.lambda_multi))
 print("Learning rate: {}".format(args.lr))
 print("Momentum: {}".format(args.momentum))
 print("Gpu used: {}".format(args.gpu))
+
+# def audio_collate_fn(batch):
+#     """
+#     batch = [(feat, label, cont, inp), ...]
+#     * feat   – NumPy array returned by get_features
+#     * label  – integer category
+#     * cont   – [valence, arousal] (kept for compatibility)
+#     * inp    – optional embedding (unused for pure audio)
+#     """
+#     feats, labs, conts, inps = zip(*batch)
+#     feats = torch.stack([torch.from_numpy(f).float() for f in feats])
+#     labs  = torch.tensor(labs, dtype=torch.long)
+#     conts = torch.stack([torch.from_numpy(c).float() for c in conts])
+#     # `inp` may be a tensor already (word‑embedding); keep as‑is
+#     inps = torch.stack(inps) if isinstance(inps[0], torch.Tensor) else None
+#     return feats, labs, conts, inps
 
 def main():
     ########################################################
@@ -144,21 +166,38 @@ def main():
                                         crop_face=True)
         val_dataset = AffectNet_dataset(root_dir=args.image_dir, data_pkl=args.data, emb_pkl=args.emb, aligner=aligner, train=False, transform=val_transforms,
                                         crop_face=True)
-    else:
+    elif args.dataset == 'affwild2':
         train_dataset = Affwild2_dataset(data_pkl=args.data, emb_pkl=args.emb, train=True, transform=train_transforms)
 
         val_dataset = Affwild2_dataset(data_pkl=args.data, emb_pkl=args.emb, train=False, transform=val_transforms)
 
+    else:
+        train_dataset = IEMOCAP_dataset(root_dir=args.audio_dir, data_pkl=args.data, sr=22050, train=True)
+        val_dataset = IEMOCAP_dataset(root_dir=args.audio_dir, data_pkl=args.data, sr=22050, train=False)
+        collate = audio_collate_fn
 
-    train_dataloader = DataLoader(train_dataset, batch_size=args.batch_size,
-                                  shuffle=True, num_workers=args.workers, pin_memory=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=args.batch_size,
-                                shuffle=True, num_workers=args.workers, pin_memory=True)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.workers,
+        pin_memory=True,
+        collate_fn=collate,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.workers,
+        pin_memory=True,
+        collate_fn=collate,
+    )
 
     #############################################################################
     # Model Definition (Model, Loss Function, Optimizer)
     #############################################################################
-
     if args.model == 'single_task':
         if args.network == 'densenet':
             model = models.densenet121(pretrained=True)

@@ -44,8 +44,6 @@ class Emotion_GCN(nn.Module):
 
         return x[:, :7], x[:, 7:]
 
-
-
 class multi_densenet(nn.Module):
     def __init__(self, pretrained=True, num_categorical=7):
         super(multi_densenet, self).__init__()
@@ -67,8 +65,6 @@ class multi_densenet(nn.Module):
         out_cat = self.lin_cat(out)
         
         return out_cat, out_cont
-
-
 
 class BReGNeXt_GCN(nn.Module):
 
@@ -100,3 +96,43 @@ class BReGNeXt_GCN(nn.Module):
         x = torch.matmul(feature, x)
 
         return x[:, :7], x[:, 7:]
+
+# Code from https://github.com/samiulabir201/IEMOCAP_GCN/blob/main/models/mlp.py
+class MLP(nn.Module):
+    def __init__(self, num_layers, input_dim, hidden_dim, output_dim):
+        '''
+        num_layers: number of layers excluding the input layer
+        input_dim: input feature dimensionality
+        hidden_dim: hidden unit dimensionality at all layers
+        output_dim: number of prediction classes
+        device: CUDA for GPU, else device
+        '''
+
+        super(MLP, self).__init__()
+        self.is_linear = False # default assumes we're working with the MLP
+        self.num_layers = num_layers
+
+        if num_layers < 1:
+            raise ValueError("Number of layers must be positive")
+        elif num_layers == 1:
+            self.is_linear = True
+            self.linear = nn.Linear(input_dim, output_dim, bias=True)
+        else:
+            self.linears = torch.nn.ModuleList()
+            self.batch_norms = torch.nn.ModuleList()
+            self.linears.append(nn.Linear(input_dim, hidden_dim))
+            for layer in range(num_layers - 2):
+                self.linears.append(nn.Linear(hidden_dim, hidden_dim))
+            self.linears.append(nn.Linear(hidden_dim, output_dim))
+
+            for layer in range(num_layers - 1):
+                self.batch_norms.append(nn.BatchNormId(hidden_dim))
+        
+    def forward(self, x):
+        if self.is_linear:
+            return self.linear(x)
+        else:
+            h = x
+            for layer in range(self.num_layers - 1):
+                h = F.relu(self.batch_norms[layer](self.linears[layer](h)))
+            return self.linears[self.num_layers](h)

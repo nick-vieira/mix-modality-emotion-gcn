@@ -3,7 +3,14 @@ import cv2
 import torch
 import pickle
 import numpy as np
-
+import pandas as pd
+import re
+import librosa
+import soundfile as sf
+import matplotlib.pyplot as plt
+import matplotlib.style as ms
+from torch.nn.utils.rnn import pad_sequence
+from joblib import Parallel, delayed
 from PIL import Image
 from torch.utils.data import Dataset
 
@@ -121,3 +128,32 @@ class Affwild2_dataset(Dataset):
         
         return image, expression, cont, self.inp
                 
+class IEMOCAP_dataset(Dataset):
+    '''IEMOCAP'''
+
+    def __init__(self, train=True):
+        self.videoIDs, self.videoSpeaker, self.videoLabels, self.videoText, \
+        self.videoAudio, self.videoVisual, self.videoSentence, self.trainVid,\
+        self.testVid = pickle.load(open('./iemocap_features/IEMOCAP_features.pkl', 'rb'), encoding='utf8')
+
+        self.keys = [x for x in (self.trainVid if train else self.testVid)]
+        self.len = len(self.keys)
+
+        def __len__(self):
+            return self.len
+
+        def __getitem__(self, index):
+            vid=self.keys[index]
+            return torch.FloatTensor(self.videoText[vid]),\
+                torch.FloatTensor(self.videoVisual[vid]),\
+                torch.FloatTensor(self.videoAudio[vid]),\
+                torch.FloatTensor([[1,0] if x=='M' else [0,1] for x in\
+                                    self.videoSpeakers[vid]]),\
+                torch.FloatTensor([1]*len(self.videoLabels[vid])),\
+                torch.LongTensor(self.videoLabels[vid]),\
+                vid
+        
+        def collate_audio_fn(self, data):
+            dat = pd.DataFrame(data)
+            return [pad_sequence(dat[i]) if i<4 else pad_sequence(dat[i], True) if i<6 else dat[i].tolist() for i in dat]
+        
