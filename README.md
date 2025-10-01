@@ -1,18 +1,10 @@
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/exploiting-emotional-dependencies-with-graph/facial-expression-recognition-on-affectnet)](https://paperswithcode.com/sota/facial-expression-recognition-on-affectnet?p=exploiting-emotional-dependencies-with-graph)
+Fork of the official PyTorch implementation of the paper "Exploiting Emotional Dependencies with Graph Convolutional Networks for Facial Expression Recognition" accepted at IEEE FG 2021.
 
-# Emotion-GCN: Exploiting Emotional Dependencies with Graph Convolutional Networks for Facial Expression Recognition
-
-<img src="/model.png" alt="model" width="1100"/>
-
-This repository hosts the official PyTorch implementation of our paper "Exploiting Emotional Dependencies with Graph Convolutional Networks for Facial Expression Recognition" accepted at IEEE FG 2021.
+The goal is to add support for audio/speech emotion recognition datasets to explore the viability of GCNs for multilingual SER.
 
 Paper: [https://arxiv.org/abs/2106.03487](https://arxiv.org/abs/2106.03487)
 
-Authored by: Panagiotis Antoniadis, Panagiotis Paraskevas Filntisis, Petros Maragos
-
-## Abstract
-> Over the past few years, deep learning methods have shown remarkable results in many face-related tasks including automatic facial expression recognition (FER) in-the-wild. Meanwhile, numerous models describing the human emotional states have been proposed by the psychology community. However, we have no clear evidence as to which representation is more appropriate and the majority of FER systems use either the categorical or the dimensional model of affect. Inspired by recent work in multi-label classification, this paper proposes a novel multi-task learning (MTL) framework that exploits the dependencies between these two models using a Graph Convolutional Network (GCN) to recognize facial expressions in-the-wild. Specifically, a shared feature representation is learned for both discrete and continuous recognition in a MTL setting. Moreover, the facial expression classifiers and the valence-arousal regressors are learned through a GCN that explicitly captures the dependencies between them. To evaluate the performance of our method under real-world conditions we train our models on AffectNet dataset. The results of our experiments show that our method outperforms the current state-of-the-art methods on discrete FER.
-
+Original authored by: Panagiotis Antoniadis, Panagiotis Paraskevas Filntisis, Petros Maragos
 
 ## Preparation
 
